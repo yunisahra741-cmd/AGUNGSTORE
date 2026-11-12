@@ -1,0 +1,49 @@
+name: Build AGUNGSTORE APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract Android source
+        run: |
+          unzip AGUNGSTORE-Android-Source.zip -d source
+          find source -maxdepth 3 -type f | head -50
+
+      - name: Find project folder
+        run: |
+          if [ -f "source/build.gradle" ] || [ -f "source/settings.gradle" ]; then
+            echo "PROJECT_DIR=source" >> $GITHUB_ENV
+          else
+            PROJECT_DIR=$(find source -name settings.gradle -o -name settings.gradle.kts | head -1 | xargs dirname)
+            echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+          fi
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build APK
+        run: |
+          cd "$PROJECT_DIR"
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AGUNGSTORE-APK
+          path: "**/build/outputs/apk/debug/*.apk"
