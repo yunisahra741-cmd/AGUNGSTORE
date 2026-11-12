@@ -7,6 +7,7 @@ on:
     branches:
       - main
 
+
 jobs:
   build:
     name: Build Android APK
@@ -14,49 +15,60 @@ jobs:
 
     steps:
 
-      # =========================
+      # ==========================================
       # CHECKOUT REPOSITORY
-      # =========================
+      # ==========================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
-      # =========================
+      # ==========================================
       # CHECK SOURCE ZIP
-      # =========================
+      # ==========================================
       - name: Check source file
         run: |
-          echo "=== FILE DI REPOSITORY ==="
+          echo "================================"
+          echo "CEK FILE REPOSITORY"
+          echo "================================"
+
           ls -lah
 
           if [ ! -f "AGUNGSTORE-Android.zip" ]; then
-            echo "ERROR: File AGUNGSTORE-Android.zip tidak ditemukan!"
+            echo "ERROR!"
+            echo "File AGUNGSTORE-Android.zip tidak ditemukan!"
             exit 1
           fi
 
-          echo "SOURCE ZIP DITEMUKAN!"
+          echo "AGUNGSTORE-Android.zip ditemukan!"
 
 
-      # =========================
+      # ==========================================
       # EXTRACT ANDROID SOURCE
-      # =========================
+      # ==========================================
       - name: Extract Android source
         run: |
+          echo "================================"
+          echo "EXTRACT ANDROID SOURCE"
+          echo "================================"
+
           rm -rf source
           mkdir -p source
 
-          unzip -q AGUNGSTORE-Android.zip -d source
+          unzip -q "AGUNGSTORE-Android.zip" -d source
 
-          echo "=== STRUKTUR SOURCE ==="
+          echo "=== FILE SOURCE ==="
+
           find source -maxdepth 5 -type f | head -200
 
 
-      # =========================
+      # ==========================================
       # FIND ANDROID PROJECT
-      # =========================
+      # ==========================================
       - name: Find Android project
         run: |
-          echo "=== MENCARI ANDROID PROJECT ==="
+          echo "================================"
+          echo "MENCARI PROJECT ANDROID"
+          echo "================================"
 
           SETTINGS_FILE=$(find source -type f \
             \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
@@ -66,40 +78,47 @@ jobs:
 
           if [ -z "$SETTINGS_FILE" ]; then
             echo "ERROR: settings.gradle tidak ditemukan!"
-            echo "=== ISI SOURCE ==="
-            find source -maxdepth 5 -type f
+
+            echo "=== SEMUA FILE ==="
+            find source -type f | head -500
+
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$SETTINGS_FILE")
 
           echo "PROJECT_DIR=$PROJECT_DIR"
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
 
-      # =========================
+      # ==========================================
       # SHOW PROJECT INFORMATION
-      # =========================
+      # ==========================================
       - name: Show Android project
         run: |
-          echo "=== PROJECT DIRECTORY ==="
-          echo "$PROJECT_DIR"
-
           cd "$PROJECT_DIR"
 
-          echo "=== CURRENT DIRECTORY ==="
+          echo "================================"
+          echo "PROJECT DIRECTORY"
+          echo "================================"
+
           pwd
 
-          echo "=== FILE PROJECT ==="
+          echo ""
+          echo "=== ISI PROJECT ==="
+
           ls -lah
 
-          echo "=== FILE ANDROID ==="
+          echo ""
+          echo "=== STRUKTUR PROJECT ==="
+
           find . -maxdepth 3 -type f | head -200
 
 
-      # =========================
+      # ==========================================
       # SETUP JAVA 17
-      # =========================
+      # ==========================================
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -107,19 +126,23 @@ jobs:
           java-version: "17"
 
 
-      # =========================
+      # ==========================================
       # SETUP GRADLE
-      # =========================
+      # ==========================================
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
 
-      # =========================
+      # ==========================================
       # ENABLE ANDROIDX
-      # =========================
+      # ==========================================
       - name: Enable AndroidX
         run: |
           cd "$PROJECT_DIR"
+
+          echo "================================"
+          echo "ENABLE ANDROIDX"
+          echo "================================"
 
           touch gradle.properties
 
@@ -129,90 +152,218 @@ jobs:
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
 
+          echo ""
           echo "=== gradle.properties ==="
+
           cat gradle.properties
 
 
-      # =========================
+      # ==========================================
+      # FIX KOTLIN DUPLICATE CLASSES
+      # ==========================================
+      - name: Fix Kotlin duplicate classes
+        run: |
+          cd "$PROJECT_DIR"
+
+          echo "================================"
+          echo "FIX KOTLIN DEPENDENCY"
+          echo "================================"
+
+          cat > kotlin-fix.gradle <<'EOF'
+          allprojects {
+
+              configurations.configureEach {
+
+                  resolutionStrategy {
+
+                      force "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
+
+                      force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22"
+
+                      force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22"
+
+                  }
+
+              }
+
+          }
+          EOF
+
+          echo ""
+          echo "=== kotlin-fix.gradle ==="
+
+          cat kotlin-fix.gradle
+
+
+      # ==========================================
+      # APPLY KOTLIN FIX
+      # ==========================================
+      - name: Apply Kotlin fix
+        run: |
+          cd "$PROJECT_DIR"
+
+          echo "================================"
+          echo "APPLY KOTLIN FIX"
+          echo "================================"
+
+          if [ -f "build.gradle" ]; then
+
+            if ! grep -q "kotlin-fix.gradle" build.gradle; then
+
+              echo "" >> build.gradle
+              echo "apply from: 'kotlin-fix.gradle'" >> build.gradle
+
+            fi
+
+          else
+
+            echo "WARNING: build.gradle tidak ditemukan"
+
+          fi
+
+          echo ""
+          echo "=== ROOT BUILD.GRADLE ==="
+
+          cat build.gradle || true
+
+
+      # ==========================================
       # PREPARE GRADLE
-      # =========================
+      # ==========================================
       - name: Prepare Gradle
         run: |
           cd "$PROJECT_DIR"
 
-          echo "=== CEK GRADLE ==="
+          echo "================================"
+          echo "PREPARE GRADLE"
+          echo "================================"
 
           if [ -f "./gradlew" ]; then
+
             echo "Gradle Wrapper ditemukan"
 
             chmod +x ./gradlew
 
-            ./gradlew --version
-
             echo "GRADLE_COMMAND=./gradlew" >> "$GITHUB_ENV"
 
+            ./gradlew --version
+
           else
+
             echo "Gradle Wrapper tidak ditemukan"
             echo "Menggunakan Gradle sistem"
 
+            echo "GRADLE_COMMAND=gradle" >> "$GITHUB_ENV"
+
             gradle --version
 
-            echo "GRADLE_COMMAND=gradle" >> "$GITHUB_ENV"
           fi
 
 
-      # =========================
+      # ==========================================
+      # SHOW DEPENDENCIES
+      # ==========================================
+      - name: Check dependencies
+        run: |
+          cd "$PROJECT_DIR"
+
+          echo "================================"
+          echo "CEK DEPENDENCY"
+          echo "================================"
+
+          $GRADLE_COMMAND :app:dependencies \
+            --configuration debugRuntimeClasspath \
+            --no-daemon || true
+
+
+      # ==========================================
       # CLEAN PROJECT
-      # =========================
+      # ==========================================
       - name: Clean project
         run: |
           cd "$PROJECT_DIR"
 
-          echo "=== CLEAN PROJECT ==="
+          echo "================================"
+          echo "CLEAN PROJECT"
+          echo "================================"
 
           $GRADLE_COMMAND clean \
             --no-daemon
 
 
-      # =========================
+      # ==========================================
       # BUILD DEBUG APK
-      # =========================
+      # ==========================================
       - name: Build Debug APK
         run: |
           cd "$PROJECT_DIR"
 
-          echo "=== MULAI BUILD APK ==="
+          echo "================================"
+          echo "MULAI BUILD AGUNGSTORE APK"
+          echo "================================"
 
           $GRADLE_COMMAND assembleDebug \
             --stacktrace \
+            --info \
             --no-daemon
 
 
-      # =========================
-      # SHOW GENERATED APK
-      # =========================
-      - name: Show generated APK
+      # ==========================================
+      # FIND GENERATED APK
+      # ==========================================
+      - name: Find APK
         run: |
-          echo "=== MENCARI FILE APK ==="
+          echo "================================"
+          echo "MENCARI APK"
+          echo "================================"
 
           find source -type f -name "*.apk" -print
 
-          APK_FILE=$(find source -type f -name "*.apk" | head -1)
+          APK_FILE=$(find source \
+            -type f \
+            -path "*/build/outputs/apk/*/*.apk" \
+            | head -1)
 
           if [ -z "$APK_FILE" ]; then
-            echo "ERROR: APK tidak ditemukan!"
-            exit 1
+
+            APK_FILE=$(find source \
+              -type f \
+              -name "*.apk" \
+              | head -1)
+
           fi
 
-          echo "APK ditemukan:"
+          if [ -z "$APK_FILE" ]; then
+
+            echo "ERROR: APK tidak ditemukan!"
+
+            exit 1
+
+          fi
+
+          echo ""
+          echo "APK BERHASIL DITEMUKAN!"
+
           echo "$APK_FILE"
 
           echo "APK_FILE=$APK_FILE" >> "$GITHUB_ENV"
 
 
-      # =========================
-      # UPLOAD APK ARTIFACT
-      # =========================
+      # ==========================================
+      # SHOW APK INFORMATION
+      # ==========================================
+      - name: Show APK information
+        run: |
+          echo "================================"
+          echo "INFORMASI APK"
+          echo "================================"
+
+          ls -lh "$APK_FILE"
+
+
+      # ==========================================
+      # UPLOAD APK
+      # ==========================================
       - name: Upload AGUNGSTORE APK
         uses: actions/upload-artifact@v4
         with:
