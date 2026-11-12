@@ -2,28 +2,47 @@ name: Build AGUNGSTORE APK
 
 on:
   workflow_dispatch:
+
   push:
     branches:
       - main
 
 jobs:
   build:
+
     runs-on: ubuntu-latest
 
     steps:
 
+      # =========================
+      # CHECKOUT
+      # =========================
       - name: Checkout repository
         uses: actions/checkout@v4
 
+
+      # =========================
+      # EXTRACT SOURCE ZIP
+      # =========================
       - name: Extract Android source
         run: |
           rm -rf source
-          mkdir source
+          mkdir -p source
+
           unzip -q AGUNGSTORE-Android-Source.zip -d source
 
+          echo "=== FILE SOURCE ==="
+          find source -maxdepth 5 -type f | head -100
+
+
+      # =========================
+      # FIND ANDROID PROJECT
+      # =========================
       - name: Find Android project
         run: |
           SETTINGS_FILE=$(find source -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) | head -1)
+
+          echo "SETTINGS_FILE=$SETTINGS_FILE"
 
           if [ -z "$SETTINGS_FILE" ]; then
             echo "ERROR: settings.gradle tidak ditemukan!"
@@ -35,18 +54,38 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
 
+
+      # =========================
+      # SETUP JAVA
+      # =========================
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
+
+      # =========================
+      # SETUP GRADLE
+      # =========================
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+
+      # =========================
+      # FIX ANDROIDX
+      # =========================
       - name: Enable AndroidX
         run: |
           cd "$PROJECT_DIR"
+
+          touch gradle.properties
+
+          grep -v "^android.useAndroidX=" gradle.properties > temp.properties || true
+          mv temp.properties gradle.properties
+
+          grep -v "^android.enableJetifier=" gradle.properties > temp.properties || true
+          mv temp.properties gradle.properties
 
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
@@ -54,19 +93,94 @@ jobs:
           echo "=== gradle.properties ==="
           cat gradle.properties
 
+
+      # =========================
+      # FIX KOTLIN DUPLICATE
+      # =========================
+      - name: Fix duplicate Kotlin libraries
+        run: |
+          cd "$PROJECT_DIR"
+
+          echo "=== Memperbaiki konflik Kotlin ==="
+
+          cat > kotlin-fix.gradle <<'EOF'
+          allprojects {
+              configurations.all {
+                  resolutionStrategy {
+                      force "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
+                      force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22"
+                      force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22"
+                  }
+              }
+          }
+          EOF
+
+          echo "apply from: 'kotlin-fix.gradle'" >> build.gradle
+
+
+      # =========================
+      # SHOW PROJECT
+      # =========================
+      - name: Show project information
+        run: |
+          cd "$PROJECT_DIR"
+
+          echo "=== PROJECT DIR ==="
+          pwd
+
+          echo "=== PROJECT FILES ==="
+          find . -maxdepth 3 -type f | head -100
+
+          echo "=== BUILD GRADLE ==="
+          cat build.gradle || true
+
+          echo "=== APP BUILD GRADLE ==="
+          cat app/build.gradle || true
+
+
+      # =========================
+      # BUILD APK
+      # =========================
       - name: Build Debug APK
         run: |
           cd "$PROJECT_DIR"
-          gradle assembleDebug --stacktrace
 
+          echo "=== MULAI BUILD APK ==="
+
+          gradle clean
+
+          gradle assembleDebug \
+            --stacktrace \
+            --no-daemon
+
+
+      # =========================
+      # FIND APK
+      # =========================
       - name: Find APK
         run: |
           echo "=== MENCARI APK ==="
+
           find source -type f -name "*.apk"
 
+          APK_FILE=$(find source -type f -name "*.apk" | head -1)
+
+          if [ -z "$APK_FILE" ]; then
+            echo "ERROR: APK tidak ditemukan!"
+            exit 1
+          fi
+
+          echo "APK_FILE=$APK_FILE"
+          echo "APK_FILE=$APK_FILE" >> $GITHUB_ENV
+
+
+      # =========================
+      # UPLOAD APK
+      # =========================
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AGUNGSTORE-APK
           path: source/**/*.apk
           if-no-files-found: error
+          retention-days: 7
