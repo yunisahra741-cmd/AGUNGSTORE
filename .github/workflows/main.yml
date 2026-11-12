@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -20,20 +21,18 @@ jobs:
           mkdir source
           unzip -q AGUNGSTORE-Android-Source.zip -d source
 
-          echo "=== Isi source ==="
-          find source -maxdepth 4 -type f | head -100
-
       - name: Find Android project
         run: |
-          PROJECT_DIR=$(dirname "$(find source -name settings.gradle -o -name settings.gradle.kts | head -1)")
+          SETTINGS_FILE=$(find source -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) | head -1)
 
-          echo "PROJECT_DIR=$PROJECT_DIR"
-
-          if [ -z "$PROJECT_DIR" ] || [ "$PROJECT_DIR" = "." ]; then
-            echo "ERROR: Android project tidak ditemukan!"
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "ERROR: settings.gradle tidak ditemukan!"
             exit 1
           fi
 
+          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
+
+          echo "PROJECT_DIR=$PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
 
       - name: Set up JDK
@@ -45,15 +44,15 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Show project files
+      - name: Enable AndroidX
         run: |
           cd "$PROJECT_DIR"
-          echo "=== PROJECT DIRECTORY ==="
-          pwd
-          echo "=== FILES ==="
-          ls -la
-          echo "=== APP DIRECTORY ==="
-          ls -la app || true
+
+          echo "android.useAndroidX=true" >> gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+
+          echo "=== gradle.properties ==="
+          cat gradle.properties
 
       - name: Build Debug APK
         run: |
