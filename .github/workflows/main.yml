@@ -2,7 +2,6 @@ name: Build AGUNGSTORE APK
 
 on:
   workflow_dispatch:
-
   push:
     branches:
       - main
@@ -12,95 +11,63 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
-      # 1. Ambil file dari repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      # 2. Extract file ZIP source Android
       - name: Extract Android source
         run: |
-          echo "=== Isi repository ==="
-          ls -lah
-
-          echo "=== Extract ZIP ==="
           rm -rf source
-          mkdir -p source
+          mkdir source
+          unzip -q AGUNGSTORE-Android-Source.zip -d source
 
-          unzip -o AGUNGSTORE-Android-Source.zip -d source
-
-          echo "=== Struktur folder source ==="
+          echo "=== Isi source ==="
           find source -maxdepth 4 -type f | head -100
 
-
-      # 3. Cari file Gradle Wrapper
       - name: Find Android project
         run: |
-          echo "=== Mencari gradlew ==="
+          PROJECT_DIR=$(dirname "$(find source -name settings.gradle -o -name settings.gradle.kts | head -1)")
 
-          GRADLEW=$(find source -type f -name "gradlew" | head -1)
+          echo "PROJECT_DIR=$PROJECT_DIR"
 
-          echo "GRADLEW ditemukan: $GRADLEW"
-
-          if [ -z "$GRADLEW" ]; then
-            echo "========================================"
-            echo "ERROR: File gradlew tidak ditemukan!"
-            echo "Isi source:"
-            find source -maxdepth 5 -type f | head -200
-            echo "========================================"
+          if [ -z "$PROJECT_DIR" ] || [ "$PROJECT_DIR" = "." ]; then
+            echo "ERROR: Android project tidak ditemukan!"
             exit 1
           fi
 
-          PROJECT_DIR=$(dirname "$GRADLEW")
-
-          echo "PROJECT_DIR=$PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
 
-
-      # 4. Setup Java
-      - name: Set up Java
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      # 5. Beri izin gradlew
-      - name: Prepare Gradle
+      - name: Show project files
         run: |
           cd "$PROJECT_DIR"
-
-          echo "=== Project Directory ==="
+          echo "=== PROJECT DIRECTORY ==="
           pwd
+          echo "=== FILES ==="
+          ls -la
+          echo "=== APP DIRECTORY ==="
+          ls -la app || true
 
-          echo "=== Isi Project ==="
-          ls -lah
-
-          chmod +x gradlew
-
-
-      # 6. Build APK Debug
-      - name: Build APK
+      - name: Build Debug APK
         run: |
           cd "$PROJECT_DIR"
+          gradle assembleDebug --stacktrace
 
-          ./gradlew assembleDebug --stacktrace
-
-
-      # 7. Cari hasil APK
       - name: Find APK
         run: |
-          echo "=== Mencari APK ==="
-
+          echo "=== MENCARI APK ==="
           find source -type f -name "*.apk"
 
-
-      # 8. Upload APK hasil build
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AGUNGSTORE-APK
-          path: |
-            source/**/build/outputs/apk/**/*.apk
+          path: source/**/*.apk
           if-no-files-found: error
