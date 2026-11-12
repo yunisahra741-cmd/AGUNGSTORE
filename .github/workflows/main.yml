@@ -15,12 +15,12 @@ jobs:
 
       - name: Extract Android source
         run: |
-          unzip AGUNGSTORE-Android-Source.zip -d source
+          unzip -q AGUNGSTORE-Android-Source.zip -d source
           find source -maxdepth 3 -type f | head -50
 
       - name: Find project folder
         run: |
-          if [ -f "source/build.gradle" ] || [ -f "source/settings.gradle" ]; then
+          if [ -f "source/build.gradle" ] || [ -f "source/settings.gradle" ] || [ -f "source/settings.gradle.kts" ]; then
             echo "PROJECT_DIR=source" >> $GITHUB_ENV
           else
             PROJECT_DIR=$(find source -name settings.gradle -o -name settings.gradle.kts | head -1 | xargs dirname)
@@ -32,9 +32,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
 
       - name: Build APK
         run: |
