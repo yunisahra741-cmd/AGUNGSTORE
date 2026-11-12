@@ -2,45 +2,105 @@ name: Build AGUNGSTORE APK
 
 on:
   workflow_dispatch:
+
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+
+      # 1. Ambil file dari repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
+
+      # 2. Extract file ZIP source Android
       - name: Extract Android source
         run: |
-          unzip -q AGUNGSTORE-Android-Source.zip -d source
-          find source -maxdepth 3 -type f | head -50
+          echo "=== Isi repository ==="
+          ls -lah
 
-      - name: Find project folder
+          echo "=== Extract ZIP ==="
+          rm -rf source
+          mkdir -p source
+
+          unzip -o AGUNGSTORE-Android-Source.zip -d source
+
+          echo "=== Struktur folder source ==="
+          find source -maxdepth 4 -type f | head -100
+
+
+      # 3. Cari file Gradle Wrapper
+      - name: Find Android project
         run: |
-          if [ -f "source/build.gradle" ] || [ -f "source/settings.gradle" ] || [ -f "source/settings.gradle.kts" ]; then
-            echo "PROJECT_DIR=source" >> $GITHUB_ENV
-          else
-            PROJECT_DIR=$(find source -name settings.gradle -o -name settings.gradle.kts | head -1 | xargs dirname)
-            echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+          echo "=== Mencari gradlew ==="
+
+          GRADLEW=$(find source -type f -name "gradlew" | head -1)
+
+          echo "GRADLEW ditemukan: $GRADLEW"
+
+          if [ -z "$GRADLEW" ]; then
+            echo "========================================"
+            echo "ERROR: File gradlew tidak ditemukan!"
+            echo "Isi source:"
+            find source -maxdepth 5 -type f | head -200
+            echo "========================================"
+            exit 1
           fi
 
+          PROJECT_DIR=$(dirname "$GRADLEW")
+
+          echo "PROJECT_DIR=$PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+
+
+      # 4. Setup Java
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+
+      # 5. Beri izin gradlew
+      - name: Prepare Gradle
+        run: |
+          cd "$PROJECT_DIR"
+
+          echo "=== Project Directory ==="
+          pwd
+
+          echo "=== Isi Project ==="
+          ls -lah
+
+          chmod +x gradlew
+
+
+      # 6. Build APK Debug
       - name: Build APK
         run: |
           cd "$PROJECT_DIR"
-          chmod +x gradlew
-          ./gradlew assembleDebug
 
+          ./gradlew assembleDebug --stacktrace
+
+
+      # 7. Cari hasil APK
+      - name: Find APK
+        run: |
+          echo "=== Mencari APK ==="
+
+          find source -type f -name "*.apk"
+
+
+      # 8. Upload APK hasil build
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AGUNGSTORE-APK
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: |
+            source/**/build/outputs/apk/**/*.apk
+          if-no-files-found: error
